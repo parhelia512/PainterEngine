@@ -3325,7 +3325,7 @@ px_void PX_GeoDrawTriangle(px_surface *psurface,px_point2D p0,px_point2D p1,px_p
 	
 }
 
-px_void PX_GeoRasterizeTriangle(px_surface* psurface,px_int x1, px_int y1, px_int x2, px_int y2, px_int x3, px_int y3,px_color color)
+px_void PX_GeoRasterizeTriangle(px_surface* psurface,px_int x1, px_int y1, px_int x2, px_int y2, px_int x3, px_int y3,px_color color, px_int view_width, px_int view_height, px_float zbuffer[], px_int zw, px_float z0, px_float z1, px_float z2)
 {
 	px_int minX = (x1 < x2) ? ((x1 < x3) ? x1 : x3) : ((x2 < x3) ? x2 : x3), maxX = (x1 > x2) ? ((x1 > x3) ? x1 : x3) : ((x2 > x3) ? x2 : x3);
 	px_int minY = (y1 < y2) ? ((y1 < y3) ? y1 : y3) : ((y2 < y3) ? y2 : y3), maxY = (y1 > y2) ? ((y1 > y3) ? y1 : y3) : ((y2 > y3) ? y2 : y3);
@@ -3375,17 +3375,24 @@ px_void PX_GeoRasterizeTriangle(px_surface* psurface,px_int x1, px_int y1, px_in
 		px_color *pGPU_dst_addr= psurface->surfaceBuffer+minY*psurface->width+minX;
 		PX_GPU_RenderTriangleRasterizer(psurface->surfaceBuffer, xcount,xcount,ycount, pGPU_dst_addr, psurface->width, PX_COLOR_FORMAT,0x80808080, gpu_x1,gpu_y1,gpu_x2,gpu_y2,gpu_x3,gpu_y3, color,PX_COLOR(0,255,255,255));
 #else
+		px_float z = PX_MIN(z0, PX_MIN(z1, z2));
 		for (y = minY; y <= maxY; y++) for (x = minX; x <= maxX; x++)
 		{
 			px_int area1 = (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1);
 			px_int area2 = (x3 - x2) * (y - y2) - (y3 - y2) * (x - x2);
 			px_int area3 = (x1 - x3) * (y - y3) - (y1 - y3) * (x - x3);
 			px_byte area1_32, area2_32, area3_32;
-			area1_32 = (area1 & 0x80000000)?1:0;
-			area2_32 = (area2 & 0x80000000) ? 1 : 0;
-			area3_32 = (area3 & 0x80000000) ? 1 : 0;
+			area1_32 = area1 < 0;
+			area2_32 = area2 < 0;
+			area3_32 = area3 < 0;
 			if (area1_32== area2_32&& area2_32== area3_32)
 			{
+				if (zbuffer[y * zw + x] != 0 && z > zbuffer[y * zw + x])
+				{
+					continue;
+				}
+				zbuffer[y * zw + x] = z;
+
 				PX_SurfaceDrawPixel(psurface,x, y, color);
 			}
 		}
